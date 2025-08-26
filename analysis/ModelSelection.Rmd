@@ -1,0 +1,369 @@
+---
+title: "Fraud Detection on Bank Payments"
+subtitle: "Model Selection and Performance Analysis"
+author: "domjoseph2000@gmail.com  "
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+source("../packages.R")
+```
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+library(tidyr)
+library(caret)
+library(rsample)
+#library(rpart)  # for decision tree
+#library(rpart.plot)
+#library(rattle) # for plotting decision tree
+#library(e1071)  # For Naive Bayes classifier
+library(naivebayes)
+library(randomForest)
+library(pROC)
+library(mlflow)
+library(carrier)
+```
+
+
+## **1. Import Data For Modelling**
+
+```{r}
+#transactions = read.csv("../data/transformed_data.csv",sep =";")
+transactions <- readRDS("../data/transactions_intermediate.rds")
+head(transactions)
+
+```
+Now lets look at the structure of th imported data.
+
+```{r}
+str(transactions)
+```
+
+## **2. Fitting a classification model**
+
+### 2.1 sampling data
+
+Create test and train data.
+```{r}
+set.seed(123)
+split_strat <- initial_split(transactions, prop = 0.8,
+                             strata = 'fraud')
+train <- training(split_strat)
+test  <- testing(split_strat)
+#rm(transactions)
+```
+
+### 2.2 Mlflow experiment
+
+Create an mlflow experiment and start a run
+
+First, you need to specify the URI scheme (file:///) for the server and backend store. In a terminal, start the server pointing to your existing backend. Create a directory (for example `C:/Users/username/mlflow-backend` if you have to):
+
+Run the below lines in command line:
+```
+conda activate mlflow-env
+
+mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/Dominic/My Projects/Fraud Detection/mlruns" --default-artifact-root "file:///A:/Dominic/My Projects/Fraud Detection/mlruns"
+```
+
+```{r}
+# --- 2. Set the MLflow tracking server ---
+mlflow_set_tracking_uri("http://127.0.0.1:5000")
+```
+
+Then create and set the experiment as active. Un-comment 1st line if performing a run the first time.
+```{r}
+#mlflow_create_experiment("Fraud-Detection-MLmodels")
+exp_location = "file:///A:/Dominic/My Projects/Fraud Detection/mlruns/artifacts"
+expid = mlflow_set_experiment("Fraud-Detection-MLmodels", artifact_location = exp_location)
+```
+
+### 2.3 Train and Log Models
+
+#### logistic regression model
+
+Use train data to perform logistic regression.
+
+```{r}
+with(mlflow_start_run()->active_run, {
+  
+  # Set the run name using a tag right at the start 🏷️
+  mlflow_set_tag("mlflow.runName", "LogisticRegression-base")
+  # Get the details of the current active run
+  current_run_id <- active_run$run_uuid
+  run_folder = paste0("/", expid, "/", current_run_id)
+  
+  # Log parameters
+  mlflow_log_param("model_type", "Logistic Regression (glm)")
+  mlflow_log_param("parameters", "{family : binomial, link : logit}")
+
+  model_glm <- glm(fraud ~ log_amount + gender + mod_age + mod_category, data = train, family = binomial(link = 'logit'))
+  print(summary(model_glm))
+
+  # --- Log Metrics ---
+  # Evaluate the model on the test set
+  predictions <- predict(model_glm, newdata = test, type = "response")
+  
+  # Calculate AUC (Area Under the Curve)
+  roc_obj <- roc(response = test$fraud, predictor = as.vector(predictions))
+  auc_metric <- as.numeric(auc(roc_obj))
+  
+  # Log the AUC metric to MLflow
+  mlflow_log_metric("auc", auc_metric)
+  message(paste("AUC:", round(auc_metric, 4)))
+  
+  # Extract confusion metrics
+  response_binary = (predictions >= 0.4)*1
+  cm = confusionMatrix(as.factor(response_binary), as.factor(test$fraud), positive = '1')
+  sensitivity <- cm$byClass['Sensitivity']
+  Precision <- cm$byClass['Pos Pred Value'] 
+  f1_score <- cm$byClass['F1']
+  
+  # Log the metrics
+  mlflow_log_metric("sensitivity", sensitivity)
+  mlflow_log_metric("precision", Precision)
+  mlflow_log_metric("f1_score", f1_score)
+  
+  message(paste("F1 Score:", round(f1_score, 4)))
+  
+  # Save the confusion matrix to a text file
+  writeLines(capture.output(cm), "confusion_matrix.txt")
+  
+  # Log the confusion matrix as an artifact
+  mlflow_log_artifact("confusion_matrix.txt",
+                      artifact_path = "artifacts",
+                      run_id = current_run_id
+                      )
+  # --- Create and Save the Plot to a File ---
+  png(filename = 'ROC.png')
+  plot(1-roc_obj$specificities, roc_obj$sensitivities, main = paste0("AUC = ", round(auc(roc_obj), 3)), xlab = 'false positive rate', ylab = 'True positive rate')
+  abline(a = 0, b = 1, lty = 2, col = "gray") 
+  dev.off()
+  mlflow_log_artifact('ROC.png', artifact_path = "plots")
+  
+  # --- Log the Model ---
+  
+  # 1. Create a "predictor" function using carrier::crate() 📦
+  # This wraps your model's predict method in a standard format.
+  predictor <- carrier::crate(function(new_data) {
+    stats::predict(!!model_glm, newdata = new_data, type = "response")
+  },model = model_glm)
+  
+  # 2. Log the generic 'predictor' object instead of the raw glm model
+  mlflow_log_model(
+    predictor,
+    artifact_path = "modelobjects"
+    )
+  # Save locally
+  saveRDS(model_glm, "fraud_model.rds")
+  # Log the RDS file as an artifact
+  mlflow_log_artifact("fraud_model.rds", artifact_path = "modelobjects")
+  
+  message("Successfully logged parameters, metrics, and model to MLflow.")
+  
+})
+```
+
+#### Fit Naive Bayes model:
+
+```{r}
+with(mlflow_start_run()->active_run, {
+  
+  # Set the run name using a tag right at the start 🏷️
+  mlflow_set_tag("mlflow.runName", "Naive Bayes-base")
+  
+  # Log parameters
+  mlflow_log_param("model_type", "Naive Bayes")
+  mlflow_log_param("parameters", "{laplace : 10, kernel : TRUE}")
+
+  model_nb <- naive_bayes(factor(fraud) ~ log_amount + gender + mod_age + mod_category, data = train, usekernel = T, laplace = 10)
+  print(summary(model_nb))
+
+  # --- Log Metrics ---
+  # Evaluate the model on the test set
+  predictions <- stats::predict(model_nb, newdata = test, type = "prob")[,'1']
+  
+  # Calculate AUC (Area Under the Curve)
+  roc_obj   <- roc(response = test$fraud, predictor = as.vector(predictions))
+  auc_metric <- as.numeric(auc(roc_obj))
+  
+  # Log the AUC metric to MLflow
+  mlflow_log_metric("auc", auc_metric)
+  message(paste("AUC:", round(auc_metric, 4)))
+  
+  # Extract confusion metrics
+  response_binary = (predictions >= 0.5)*1
+  cm = confusionMatrix(as.factor(response_binary), as.factor(test$fraud), positive = '1')
+  sensitivity <- cm$byClass['Sensitivity'] # Note: Sensitivity and Recall are the same
+  Precision <- cm$byClass['Pos Pred Value'] 
+  f1_score <- cm$byClass['F1']
+  
+  # Log the metrics
+  mlflow_log_metric("sensitivity", sensitivity)
+  mlflow_log_metric("precision", Precision)
+  mlflow_log_metric("f1_score", f1_score)
+  
+  message(paste("F1 Score:", round(f1_score, 4)))
+  
+  # Save the confusion matrix to a text file
+  writeLines(capture.output(cm), "confusion_matrix.txt")
+  
+  # Log the confusion matrix as an artifact
+  mlflow_log_artifact("confusion_matrix.txt",
+                      artifact_path = "artifacts"
+                      )
+  
+   # --- Create and Save the Plot to a File ---
+  png(filename = 'ROC.png')
+  plot(1-roc_obj$specificities, roc_obj$sensitivities, main = paste0("AUC = ", round(auc(roc_obj), 3)), xlab = 'false positive rate', ylab = 'True positive rate')
+  abline(a = 0, b = 1, lty = 2, col = "gray") 
+  dev.off()
+  mlflow_log_artifact('ROC.png', artifact_path = "plots")
+  
+  # --- Log the Model ---
+  
+  # 1. Create a "predictor" function using carrier::crate() 📦
+  # This wraps your model's predict method in a standard format.
+  predictor <- carrier::crate(function(new_data) {
+    new_data$log_amount   <- as.numeric(new_data$log_amount)
+    new_data$gender       <- as.character(new_data$gender)
+    new_data$mod_age      <- as.character(new_data$mod_age)
+    new_data$mod_category <- as.character(new_data$mod_category)
+    
+    stats::predict(!!model_nb, newdata = new_data, type = "prob")[,'1']
+  },model = model_nb)
+  
+  # 2. Log the generic 'predictor' object instead of the raw glm model
+  mlflow_log_model(
+    predictor,
+    artifact_path = "modelobjects"
+    )
+  # Save locally
+  saveRDS(model_nb, "fraud_model.rds")
+  # Log the RDS file as an artifact
+  mlflow_log_artifact("fraud_model.rds", artifact_path = "modelobjects")
+
+  message("Successfully logged parameters, metrics, and model to MLflow.")
+  
+})
+```
+#### Fit Random Forest model
+
+Use train data to perform Random Forest.
+
+```{r}
+# --- 4. Train and Log Random Forest ---
+with(mlflow_start_run(), {
+  
+  # Set the run name using a tag right at the start 🏷️
+  mlflow_set_tag("mlflow.runName", "RandomForest-base")
+  mlflow_log_param("model_type", "RandomForest")
+  mlflow_log_param("parameters", "{ntree : 500, mtry : 2}")
+
+  # Train model
+  model_rf <- randomForest::randomForest(
+    as.factor(fraud) ~ log_amount + gender + mod_age + mod_category, 
+    data = train, 
+    ntree = 500, # Number of trees in the forest
+    mtry = 2 # Number of variables sampled at each split
+  )
+  print(summary(model_rf))
+  # --- Log Metrics ---
+  # Evaluate the model on the test set
+  predictions <- predict(model_rf, newdata = test, type = "prob")[,'1']
+  
+  # Calculate AUC (Area Under the Curve)
+  roc_obj   <- roc(response = test$fraud, predictor = as.vector(predictions))
+  auc_metric <- as.numeric(auc(roc_obj))
+  
+  # Log the AUC metric to MLflow
+  mlflow_log_metric("auc", auc_metric)
+  message(paste("AUC:", round(auc_metric, 4)))
+  
+  # Extract confusion metrics
+  response_binary = (predictions >= 0.5)*1
+  cm = confusionMatrix(as.factor(response_binary), as.factor(test$fraud), positive = '1')
+  sensitivity <- cm$byClass['Sensitivity'] # Note: Sensitivity and Recall are the same
+  Precision <- cm$byClass['Pos Pred Value'] 
+  f1_score <- cm$byClass['F1']
+  
+  # Log the metrics
+  mlflow_log_metric("sensitivity", sensitivity)
+  mlflow_log_metric("precision", Precision)
+  mlflow_log_metric("f1_score", f1_score)
+  
+  message(paste("F1 Score:", round(f1_score, 4)))
+  
+  # Save the confusion matrix to a text file
+  writeLines(capture.output(cm), "confusion_matrix.txt")
+  
+  # Log the confusion matrix as an artifact
+  mlflow_log_artifact("confusion_matrix.txt",
+                      artifact_path = "artifacts"
+                      )
+  
+  # --- Create and Save the Plot to a File ---
+  png(filename = 'ROC.png')
+  plot(1-roc_obj$specificities, roc_obj$sensitivities, main = paste0("AUC = ", round(auc(roc_obj), 3)), xlab = 'false positive rate', ylab = 'True positive rate')
+  abline(a = 0, b = 1, lty = 2, col = "gray") 
+  dev.off()
+  mlflow_log_artifact('ROC.png', artifact_path = "plots")
+  
+  # Create a crate for the model
+  predictor <- crate(function(new_data) {
+    stats::predict(!!model_rf, newdata = new_data, type = "prob")[,'1']
+  },model = model_rf)
+  # 2. Log the generic 'predictor' object instead of the raw glm model
+  mlflow_log_model(
+    predictor,
+    artifact_path = "modelobjects"
+    )
+  
+    # Save locally
+  saveRDS(model_rf, "fraud_model.rds")
+  # Log the RDS file as an artifact
+  mlflow_log_artifact("fraud_model.rds", artifact_path = "modelobjects")
+  
+  message("Successfully logged parameters, metrics, and model to MLflow.")
+})
+```
+
+#### Fit SVM model
+
+Use train data to perform SVM.
+```{r,warning=FALSE, message=FALSE}
+# to be updated
+
+```
+
+## **6. Conclusion**
+
+```{r}
+# Search for all runs within that experiment using its ID
+runs_df <- mlflow_search_runs(experiment_id = expid)
+
+# Filter the metrics df
+merics_df = runs_df %>% 
+  select(run_name, metrics) %>%
+  unnest(metrics) %>%
+  bind_rows(.) %>%
+  as.data.frame(.) %>%
+  pivot_wider(names_from = 'key', 
+              values_from = 'value',
+              id_cols = c(run_name,run_id),
+              values_fn = max
+                )
+# Print the resulting table to the console
+print(merics_df)
+```
+
+Out of the models, each model has its own strength in each of the metrics considered. 
+Logistic Regression is observed to perform well on all 3 metrics, displaying an AUC value of 96% and a sensitivity of 62%,combined with an F1 score of 70%. Random forest had a slightly higher F1 score (72%), combined with high precision but lower AUC and sensitivity. While Naive Bayes has the highest AUC score at 97.7%, and also a sensitivity of 72%, which is highest among all 3,But F1 score of 56% is lowest among the three. 
+
+
+

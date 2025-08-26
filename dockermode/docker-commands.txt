@@ -1,9 +1,0 @@
-# build docker image
-docker build -t fraud-detection -f .\dockermode\Dockerfile . 
-
-# run docker container
-docker run -v "$(Get-location)\output:/home/project/output" fraud-detection
-docker run -v ".\output:/home/project/output" fraud-detection
-
-# run a container and enter the docker in an interactive shell
-docker run --rm -it fraud-detection bash

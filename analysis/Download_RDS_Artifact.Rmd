@@ -1,0 +1,58 @@
+---
+title: "Fraud Detection on Bank Payments"
+subtitle: "Download model artifact to deploy using Docker"
+author: "domjoseph2000@gmail.com  "
+---
+
+This code downloads the .rds artifact from latest model in production to be used for deployment as a REST Api using Plumber and Docker.
+
+```{r setup, include=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+library(mlflow)
+```
+Run the below lines in command line:
+`conda activate mlflow-env`
+
+`mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/Dominic/My Projects/Fraud Detection/scripts/mlruns" --default-artifact-root "file:///A:/Dominic/My Projects/Fraud Detection/scripts/mlruns"`
+
+After running, Set the MLflow Trackig URI
+```{r}
+mlflow_set_tracking_uri("http://127.0.0.1:5000")
+```
+
+Fetch the latest versions for the registered model
+
+```{r, warning=FALSE, message=FALSE}
+# This function returns the latest versions for the registered model
+versions <- mlflow_get_latest_versions("Production")
+```
+
+
+# Find the specific version
+
+```{r}
+# Find the specific version that has the "prod" alias
+run_id_to_download = versions[[1]]$run_id
+local_path <- mlflow_download_artifacts(
+  run_id = run_id_to_download, 
+  path = "modelobjects/fraud_model.rds" # artifact path ofrds object
+)
+
+```
+
+Now lets copy the data to `data` folder.
+
+```{r, warning=FALSE}
+setwd("../")
+print(getwd())
+destination_path = paste0(getwd(),"/data")
+print(paste0("Copying file to ", destination_path))
+
+```
+```{r}
+file.copy(from = trimws(local_path), to = destination_path, recursive = TRUE)
+```

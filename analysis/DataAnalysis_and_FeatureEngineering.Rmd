@@ -1,5 +1,6 @@
 ---
 title: "Fraud Detection on Bank Payments"
+subtitle: "Exploratory Data Analysis"
 author: "domjoseph2000@gmail.com  "
 ---
 
@@ -39,7 +40,7 @@ Data As we can see in the first rows below the dataset has 9 feature columns and
 *Fraud*: Target variable which shows if the transaction fraudulent(1) or benign(0)
 
 ```{r, warning=FALSE, message=FALSE}
-source(paste0(getwd(),"/packages.R"))
+source("../packages.R")
 ```
 
 ```{r, warning=FALSE, message=FALSE}
@@ -48,20 +49,13 @@ library(tidyr)
 library(corrplot)
 library(caret)
 library(rsample)
-#library(rpart)  # for decision tree
-#library(rpart.plot)
-#library(rattle) # for plotting decision tree
-#library(e1071)  # For Naive Bayes classifier
-library(naivebayes)
-#library(randomForest)
-library(pROC)
 ```
 
 
 ## **1. Import Data & Preprocessing**
 
 ```{r}
-transactions = read.csv(paste0(getwd(),"/data/","/bs140513_032310.csv"))
+transactions = read.csv(paste0("../data/","/bs140513_032310.csv"))
 head(transactions)
 
 ```
@@ -432,7 +426,7 @@ Based on the initial data exploration we performed so far, the following transfo
 3) Modified age variable. levels of age `{'1','2','3','4','5'}` have similar fraud rates, hence they are grouped together into a single level for improving the variable performance. <br>
 
 ```{r}
-transactions = transactions %>% 
+transactions_intermediate = transactions %>% 
   dplyr::mutate(
     log_amount = log(amount),
     mod_age = case_when(age %in% c('1','2','3','4','5','U') ~ '1-5',
@@ -451,98 +445,10 @@ transactions = transactions %>%
 )
 ```
 
-
-## **5. Fitting a classification model**
-
-### sampling data
-
-Create test and train data.
-```{r}
-set.seed(123)
-split_strat <- initial_split(transactions, prop = 0.8,
-                             strata = 'fraud')
-train <- training(split_strat)
-test <- testing(split_strat)
-```
-
-
-### Fit logistic regression model
-
-Use train data to perform logistic regression.
+One features are generated, save the transformed data to a specific location to be used for modelling later.
 
 ```{r}
-model.log <- glm(fraud ~ log_amount + gender + mod_age + mod_category, data = train, family = binomial(link = 'logit'))
-summary(model.log)
+# write.csv2(transactions, "../data/transformed_data.csv",row.names = FALSE)
+# Instead of write.csv()
+saveRDS(transactions_intermediate, file = "../data/transactions_intermediate.rds")
 ```
-
-Lets test the performance of the model on train and test data separately.
-
-**Predictions on train data.** 
-
-```{r,warning=FALSE, message=FALSE}
-prediction_train = predict(model.log, train, type = 'response')
-prediction_train = factor((prediction_train>=0.50)*1)
-confusionMatrix(prediction_train, factor(train$fraud), positive = '1')
-```
-
-**Predictions on test data.** 
-
-```{r,warning=FALSE, message=FALSE}
-prediction_test = predict(model.log, test, type = 'response')
-prediction_test = factor((prediction_test>=0.50)*1)
-confusionMatrix(prediction_test, factor(test$fraud), positive = '1')
-```
-Using a 50% threshold (ie, fraud = 1 if predicted probability > 0.50), the Sensitivity of the model is only around 57%. The model is favoring low FPR (few false alarms) at the expense of missing frauds. At an even lower threshold like 20%, the model may start to show better sensitivity. This can also be visualized using ROC curve.
-
-```{r,warning=FALSE, message=FALSE}
-predicted_probs = predict(model.log, test, type = 'response')
-roc_obj <- roc(test$fraud, predicted_probs)
-auc(roc_obj)  # Output: AUC value
-```
-```{r,warning=FALSE, message=FALSE}
-plot(1-roc_obj$specificities, roc_obj$sensitivities, main = paste0("AUC = ", round(auc(roc_obj), 3)), xlab = 'false positive rate', ylab = 'True positive rate')
-abline(a = 0, b = 1, lty = 2, col = "gray")  
-```
-
-### Fit Naive bayes model
-
-Use train data to perform Naive Bayes.
-
-```{r,warning=FALSE, message=FALSE}
-model.nb <- naive_bayes(factor(fraud) ~ log_amount + gender + mod_age + mod_category, data = train, usekernel = T, laplace = 10)
-summary(model.nb)
-```
-
-**Predictions on train data.**
-
-```{r,warning=FALSE, message=FALSE}
-prediction_train = predict(model.nb, train, type = 'class')
-confusionMatrix(prediction_train, factor(train$fraud), positive = '1')
-```
-
-**Predictions on test data.** 
-
-```{r,warning=FALSE, message=FALSE}
-prediction_test = predict(model.nb, test, type = 'class')
-confusionMatrix(prediction_test, factor(test$fraud), positive = '1')
-```
-
-Model has a sensitivity of almost 72% which means 72% of the fraud cases can be detected using the naive bayes algorithm. It also has a specificity of 99%, which is also good. Specificity indicates how well the model is able to distinguish a non fraud case.
-
-Now lets take a loot at the AUC value and ROC curve. 
-
-```{r,warning=FALSE, message=FALSE}
-predicted_probs = predict(model.nb, test, type = 'prob')[,"1"]
-roc_obj <- roc(test$fraud, predicted_probs)
-auc(roc_obj)  # Output: AUC value
-```
-```{r,warning=FALSE, message=FALSE}
-plot(1-roc_obj$specificities, roc_obj$sensitivities, main = paste0("AUC = ", round(auc(roc_obj), 3)), xlab = 'false positive rate', ylab = 'True positive rate')
-abline(a = 0, b = 1, lty = 2, col = "gray")  
-```
-
-
-
-## **6. Conclusion**
-
-Out of the models, Naive Bayes is observed to perform fairly well compared to other modelling techniques, displaying a sensitivity of 72%. This is decent considering the imbalance class problem we observed.
