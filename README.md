@@ -39,9 +39,9 @@ In the modelling stage, the model is trained using different ML classifier algor
 
 4. Once the models are all succesfully run, open the MLflow UI and promote the required model (based on performance or other evaluation criteria) to `Production`. Alsomake sure to tag the final version of production model as `prod`.
 
-5. Once the models are in production, run the`Download_RDS_Artifact.RMD` file to download the model artifact for further deployment. There are multiple ways to deploy a model for prediction.
+5. Once the models are in production, run the`Download_RDS_Artifact.RMD` file to download the model artifact to `./data` folder for further deployment. There are multiple ways to serve a model for prediction. The method followed in this exercise used Plumber + Docker (see next section) to containerise and serve the model.
 
-5.1. Using Plumber + Docker (see next section). Image for running the docker-container is specified in `./Dockerfile`. It calls a A Plumber API script, which is an R script (.R) that uses special comments to turn your R functions into live web API endpoints. 
+6. Image for running the docker-container is specified in `./Dockerfile`. It calls a A Plumber API script, which is an R script (.R) that uses special comments to turn your R functions into live web API endpoints. 
 
 ### Model Deployment with Docker + Plumber	        	
 
@@ -51,8 +51,12 @@ This method lets you deploy the prediction model based on model artifact as a RE
 cd 'A:/path/to/your/Fraud Detection'
 
 2. Build docker image
-docker build -t <image-name> -f ./Dockerfile . 
+
+`docker build -t <image-name> -f ./Dockerfile .` 
 
 3. Run docker container
-docker run --rm -it -p 8000:8000 <image-name> bash
+
+`docker run --rm -it -p 8000:8000 <image-name>`
+
+4. Once the container runs, the API will be accessible from `http://127.0.0.1:8000/__docs__/` which displays an interactve web-ui for inputting the raw parameters for prediction.
 

@@ -3,6 +3,7 @@ renv/
 mlruns/
 dockermode/
 analysis/*.txt
+scripts/archive/
 *.html 
 *.csv
 .Rhistory 

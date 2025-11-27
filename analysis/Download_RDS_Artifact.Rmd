@@ -39,7 +39,7 @@ versions <- mlflow_get_latest_versions("Production")
 run_id_to_download = versions[[1]]$run_id
 local_path <- mlflow_download_artifacts(
   run_id = run_id_to_download, 
-  path = "modelobjects/fraud_model.rds" # artifact path ofrds object
+  path = "modelobjects/fraud_model.rds" # artifact path of rds object
 )
 
 ```
