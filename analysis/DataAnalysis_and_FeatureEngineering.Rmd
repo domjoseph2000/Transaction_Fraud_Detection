@@ -1,7 +1,8 @@
 ---
 title: "Fraud Detection on Bank Payments"
-subtitle: "Exploratory Data Analysis"
-author: "domjoseph2000@gmail.com  "
+author: 'domjoseph2000@gmail.com  '
+subtitle: Exploratory Data Analysis
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}

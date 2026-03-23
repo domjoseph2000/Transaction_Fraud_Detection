@@ -1,7 +1,8 @@
 ---
 title: "Fraud Detection on Bank Payments"
-subtitle: "Model Selection and Performance Analysis"
-author: "domjoseph2000@gmail.com  "
+author: 'domjoseph2000@gmail.com  '
+subtitle: Model Selection and Performance Analysis
+output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
@@ -70,6 +71,7 @@ conda activate mlflow-env
 
 mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/Dominic/My Projects/Fraud Detection/mlruns" --default-artifact-root "file:///A:/Dominic/My Projects/Fraud Detection/mlruns"
 ```
+R's mlflow package is often tied to specific versions of the MLflow Python library. An environment lets you pin the exact version that matches your R package to avoid compatibility errors.
 
 ```{r}
 # --- 2. Set the MLflow tracking server ---
