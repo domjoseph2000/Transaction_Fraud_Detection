@@ -4,7 +4,7 @@ mlruns/
 dockermode/
 analysis/*.txt
 scripts/archive/
-*.html 
+#*.html 
 *.csv
 .Rhistory 
 .RData
