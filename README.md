@@ -35,23 +35,23 @@ The following steps need to be performed independently outside of R console or R
 
 MLflow R package is actually a "wrapper" around the Python process running in the background. So we need to install python and create a virtual environment where we install python `mlflow` package
 
-	- Install python version and create the venv.
+-	Install python version and create the venv.
 	
 		`python -m venv A:\path-to-venv-folder\mlflow_venv`
 		
-	- Activate your venv.
+-	Activate your venv.
 	
 		`A:\path-to-venv-folder\mlflow_venv\Scripts\activate`
 		
-	- Install mlflow python package in your venv.
+-	Install mlflow python package in your venv.
 		
 		`pip install mlflow`
 	
 Edit the system environment variables and add `MLFLOW_BIN` and `MLFLOW_PYTHON_BIN`  environment variables. These are used by the MLflow R client to locate your Python and MLflow installations.
 
-	- *MLFLOW_PYTHON_BIN*: Points to the path of the Python executable (`A:\path-to-venv-folder\mlflow_venv\Scripts\mlflow.exe`). It ensures R uses the exact version of Python where your packages are installed.
+-	*MLFLOW_PYTHON_BIN*: Points to the path of the Python executable (`A:\path-to-venv-folder\mlflow_venv\Scripts\mlflow.exe`). It ensures R uses the exact version of Python where your packages are installed.
 	
-	- *MLFLOW_BIN*: Points to the path of the MLflow CLI executable (`A:\path-to-venv-folder\mlflow_venv\Scripts\python.exe`). This allows R to trigger MLflow commands (like starting the UI or logging models) directly.
+-	*MLFLOW_BIN*: Points to the path of the MLflow CLI executable (`A:\path-to-venv-folder\mlflow_venv\Scripts\python.exe`). This allows R to trigger MLflow commands (like starting the UI or logging models) directly.
 
 ### Run Analysis
 
@@ -71,7 +71,7 @@ Edit the system environment variables and add `MLFLOW_BIN` and `MLFLOW_PYTHON_BI
 2.	Before creating the experiment and tracking the models, first, you need to start the mlflow tracking server, specify the URI scheme (file:///) for the server and backend store. In a terminal, start the server by pointing to your existing backend (Create a directory for example `C:/Users/username/mlflow-backend` if you have to):
 	Run the below lines in command line:
 	```
-		mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/<path-to-project>/mlruns" --default-artifact-root "file:///A:/<path-to-project>/mlruns"
+	mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/<path-to-project>/mlruns" --default-artifact-root "file:///A:/<path-to-project>/mlruns"
 		
 	```
 	The `file:///` prefix tells MLflow that you are using a Local Backend Store for storing artifacts. It also launches the UI & starts the web dashboard that you can view at http://127.0.0.1:5000.
