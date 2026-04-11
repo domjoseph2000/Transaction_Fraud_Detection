@@ -31,21 +31,20 @@ In the modelling stage, the model is trained using different ML classifier algor
 
 ### Install Python and Mlflow Python Package
 
-The following steps need to be performed independently outside of R console or Rstudio before the analysis and model runs.
 
-MLflow R package is actually a "wrapper" around the Python process running in the background. So we need to install python and create a virtual environment where we install python `mlflow` package
+MLflow R package is actually a "wrapper" around the Python process running in the background. So we need to install python and create a virtual environment where we install python `mlflow` package. The following steps need to be performed independently outside of R console or Rstudio before the analysis and model runs.
 
 -	Install python version and create the venv.
 	
-		`python -m venv A:\path-to-venv-folder\mlflow_venv`
+	`python -m venv A:\path-to-venv-folder\mlflow_venv`
 		
 -	Activate your venv.
 	
-		`A:\path-to-venv-folder\mlflow_venv\Scripts\activate`
+	`A:\path-to-venv-folder\mlflow_venv\Scripts\activate`
 		
 -	Install mlflow python package in your venv.
 		
-		`pip install mlflow`
+	`pip install mlflow`
 	
 Edit the system environment variables and add `MLFLOW_BIN` and `MLFLOW_PYTHON_BIN`  environment variables. These are used by the MLflow R client to locate your Python and MLflow installations.
 
@@ -72,7 +71,6 @@ Edit the system environment variables and add `MLFLOW_BIN` and `MLFLOW_PYTHON_BI
 	Run the below lines in command line:
 	```
 	mlflow server --host 127.0.0.1 --port 5000 --backend-store-uri "file:///A:/<path-to-project>/mlruns" --default-artifact-root "file:///A:/<path-to-project>/mlruns"
-		
 	```
 	The `file:///` prefix tells MLflow that you are using a Local Backend Store for storing artifacts. It also launches the UI & starts the web dashboard that you can view at http://127.0.0.1:5000.
 	
